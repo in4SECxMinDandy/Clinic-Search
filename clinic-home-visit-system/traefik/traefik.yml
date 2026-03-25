@@ -1,0 +1,58 @@
+# Traefik Configuration
+api:
+  dashboard: true
+  insecure: true
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+providers:
+  file:
+    filename: /etc/traefik/traefik.yml
+    watch: true
+
+log:
+  level: INFO
+  format: json
+
+accessLog:
+  format: json
+
+http:
+  routers:
+    gateway:
+      rule: "PathPrefix(`/api`)"
+      service: gateway
+      entryPoints:
+        - web
+    frontend:
+      rule: "PathPrefix(`/`)"
+      service: frontend
+      entryPoints:
+        - web
+      priority: 10
+    traefik-dashboard:
+      rule: "PathPrefix(`/dashboard`)"
+      service: api@internal
+      entryPoints:
+        - web
+      priority: 100
+
+  services:
+    gateway:
+      loadBalancer:
+        servers:
+          - url: "http://api-gateway:8000"
+    frontend:
+      loadBalancer:
+        servers:
+          - url: "http://frontend:80"
+
+  middlewares:
+    strip-api:
+      stripPrefix:
+        prefixes:
+          - "/api"

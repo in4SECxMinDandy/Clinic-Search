@@ -1,0 +1,10 @@
+# Auth Service Dockerfile
+FROM python:3.12.13-slim-bookworm@sha256:31c0807da611e2e377a2e9b566ad4eb038ac5a5838cbbbe6f2262259b5dc77a0
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libpq-dev && rm -rf /var/lib/apt/lists/*
+COPY services/auth-service/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY shared/ ./shared/
+COPY services/auth-service/ ./auth_service/
+EXPOSE 8003
+CMD ["uvicorn", "auth_service.main:app", "--host", "0.0.0.0", "--port", "8003"]

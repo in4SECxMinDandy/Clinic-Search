@@ -1,0 +1,30 @@
+{
+  "name": "clinic-home-visit-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext .vue,.js,.ts"
+  },
+  "dependencies": {
+    "vue": "^3.4.0",
+    "vue-router": "^4.2.5",
+    "pinia": "^2.1.7",
+    "axios": "^1.6.0",
+    "leaflet": "^1.9.4",
+    "@vue-leaflet/vue-leaflet": "^0.10.1",
+    "tailwindcss": "^3.4.0",
+    "@heroicons/vue": "^2.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
+    "vite": "^5.0.0",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "typescript": "^5.3.0",
+    "vue-tsc": "^1.8.0"
+  }
+}

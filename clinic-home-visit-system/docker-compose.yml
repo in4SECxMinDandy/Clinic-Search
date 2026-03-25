@@ -1,0 +1,284 @@
+# clinic-home-visit-system - Docker Compose
+
+services:
+  # Reverse Proxy & Load Balancer
+  traefik:
+    image: traefik:3.0.4
+    container_name: traefik
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+    networks:
+      - clinic-network
+    restart: unless-stopped
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - AUTH_SERVICE_URL=http://auth-service:8003
+      - CLINIC_SERVICE_URL=http://clinic-service:8001
+      - BOOKING_SERVICE_URL=http://booking-service:8002
+      - REVIEW_SERVICE_URL=http://review-service:8004
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8005
+      - DATA_COLLECTOR_SERVICE_URL=http://data-collector-service:8006
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=INFO
+    depends_on:
+      - auth-service
+      - clinic-service
+      - booking-service
+      - review-service
+    networks:
+      - clinic-network
+    labels:
+      - "traefik.http.routers.gateway.rule=PathPrefix('/api')"
+      - "traefik.http.services.gateway.loadbalancer.server.port=8000"
+    restart: unless-stopped
+
+  # Auth Service
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    container_name: auth-service
+    ports:
+      - "8003:8003"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-supersecretkey123}
+      - JWT_ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=15
+      - REFRESH_TOKEN_EXPIRE_DAYS=7
+      - LOG_LEVEL=INFO
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - clinic-network
+    labels:
+      - "traefik.http.services.auth.loadbalancer.server.port=8003"
+    restart: unless-stopped
+
+  # Clinic Service
+  clinic-service:
+    build:
+      context: .
+      dockerfile: services/clinic-service/Dockerfile
+    container_name: clinic-service
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres
+      - REDIS_URL=redis://redis:6379
+      - AUTH_SERVICE_URL=http://auth-service:8003
+      - NOMINATIM_URL=https://nominatim.openstreetmap.org
+      - OSRM_URL=http://router:5000
+      - LOG_LEVEL=INFO
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - clinic-network
+    labels:
+      - "traefik.http.services.clinic.loadbalancer.server.port=8001"
+    restart: unless-stopped
+
+  # Booking Service
+  booking-service:
+    build:
+      context: .
+      dockerfile: services/booking-service/Dockerfile
+    container_name: booking-service
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres
+      - REDIS_URL=redis://redis:6379
+      - AUTH_SERVICE_URL=http://auth-service:8003
+      - CLINIC_SERVICE_URL=http://clinic-service:8001
+      - LOG_LEVEL=INFO
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - clinic-network
+    labels:
+      - "traefik.http.services.booking.loadbalancer.server.port=8002"
+    restart: unless-stopped
+
+  # Review Service
+  review-service:
+    build:
+      context: .
+      dockerfile: services/review-service/Dockerfile
+    container_name: review-service
+    ports:
+      - "8004:8004"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres
+      - AUTH_SERVICE_URL=http://auth-service:8003
+      - CLINIC_SERVICE_URL=http://clinic-service:8001
+      - LOG_LEVEL=INFO
+    depends_on:
+      - postgres
+    networks:
+      - clinic-network
+    labels:
+      - "traefik.http.services.review.loadbalancer.server.port=8004"
+    restart: unless-stopped
+
+  # Notification Service
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    container_name: notification-service
+    ports:
+      - "8005:8005"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - AUTH_SERVICE_URL=http://auth-service:8003
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMS_API_KEY=${SMS_API_KEY:-}
+      - LOG_LEVEL=INFO
+    depends_on:
+      - redis
+    networks:
+      - clinic-network
+    labels:
+      - "traefik.http.services.notification.loadbalancer.server.port=8005"
+    restart: unless-stopped
+
+  # Frontend (Vue SPA served via Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    networks:
+      - clinic-network
+    restart: unless-stopped
+
+  # Data Collector Service
+  data-collector-service:
+    build:
+      context: .
+      dockerfile: services/data-collector-service/Dockerfile
+    container_name: data-collector-service
+    ports:
+      - "8006:8006"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres
+      - REDIS_URL=redis://redis:6379
+      - CLINIC_SERVICE_URL=http://clinic-service:8001
+      - NOMINATIM_URL=https://nominatim.openstreetmap.org
+      - LOG_LEVEL=INFO
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - clinic-network
+    labels:
+      - "traefik.http.services.datacollector.loadbalancer.server.port=8006"
+    restart: unless-stopped
+
+  # Database
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_MULTIPLE_DATABASES=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-schemas.sql:/docker-entrypoint-initdb.d/init-schemas.sql:ro
+    networks:
+      - clinic-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    networks:
+      - clinic-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Prometheus (Observability)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    networks:
+      - clinic-network
+    restart: unless-stopped
+
+  # Grafana (Dashboards)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - clinic-network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+networks:
+  clinic-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:

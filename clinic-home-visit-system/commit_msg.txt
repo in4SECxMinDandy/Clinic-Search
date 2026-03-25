@@ -1,0 +1,8 @@
+Initial commit: ClinicSearch - Clinic Home Visit System
+
+- 7 microservices (Auth, Clinic, Booking, Review, Notification, DataCollector, API Gateway)
+- Vue.js 3 frontend with TailwindCSS + Pinia
+- Traefik reverse proxy + PostgreSQL multi-schema + Redis
+- GPS services: Haversine, OSRM routing, Nominatim geocoding
+- Prometheus + Grafana monitoring
+- Full Docker Compose setup
