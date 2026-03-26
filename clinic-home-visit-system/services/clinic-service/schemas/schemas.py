@@ -64,6 +64,7 @@ class ClinicResponse(ClinicBase):
     estimated_travel_time_min: Optional[float] = None
     created_at: datetime
     updated_at: datetime
+    doctor_count: Optional[int] = None
 
     class Config:
         from_attributes = True

@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
+    # Cookies: Secure cookies are not stored on http://localhost — use False for local dev
+    COOKIE_SECURE: bool = False
+
     class Config:
         env_file = ".env"
         case_sensitive = True

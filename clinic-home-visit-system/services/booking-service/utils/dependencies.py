@@ -30,7 +30,7 @@ async def get_db() -> AsyncSession:
     """Dependency to get database session"""
     if _db is None:
         raise RuntimeError("Database not initialized")
-    async with _db.get_async_session() as session:
+    async with _db.async_session_factory() as session:
         yield session
 
 
@@ -67,3 +67,39 @@ async def get_current_user(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid token",
     )
+
+
+async def get_current_admin_user(
+    current_user: dict = Depends(get_current_user),
+):
+    """Dependency to ensure user is admin"""
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return current_user
+
+
+async def get_clinic_owner_or_admin_user(
+    current_user: dict = Depends(get_current_user),
+):
+    """Dependency to ensure user is admin or clinic_owner"""
+    if current_user.get("role") not in ("admin", "clinic_owner"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Clinic owner or admin access required",
+        )
+    return current_user
+
+
+async def get_doctor_or_admin_user(
+    current_user: dict = Depends(get_current_user),
+):
+    """Dependency to ensure user is admin or doctor"""
+    if current_user.get("role") not in ("admin", "doctor"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Doctor or admin access required",
+        )
+    return current_user

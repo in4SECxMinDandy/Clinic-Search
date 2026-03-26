@@ -1,4 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { pinia } from '../pinia'
+import { useAuthStore } from '../stores/auth'
 
 const routes = [
   {
@@ -36,6 +38,54 @@ const routes = [
     name: 'Profile',
     component: () => import('../views/ProfileView.vue'),
   },
+  {
+    path: '/admin',
+    name: 'AdminDashboard',
+    component: () => import('../views/AdminDashboardView.vue'),
+    meta: { requiresAdmin: true },
+  },
+  {
+    path: '/admin/users',
+    name: 'AdminUsers',
+    component: () => import('../views/AdminUsersView.vue'),
+    meta: { requiresAdmin: true },
+  },
+  {
+    path: '/admin/clinics',
+    name: 'AdminClinics',
+    component: () => import('../views/AdminClinicsView.vue'),
+    meta: { requiresClinicOwnerOrAdmin: true },
+  },
+  {
+    path: '/admin/doctors',
+    name: 'AdminDoctors',
+    component: () => import('../views/AdminDoctorsView.vue'),
+    meta: { requiresClinicOwnerOrAdmin: true },
+  },
+  {
+    path: '/admin/clinic-owners',
+    name: 'AdminClinicOwners',
+    component: () => import('../views/AdminClinicOwnersView.vue'),
+    meta: { requiresAdmin: true },
+  },
+  {
+    path: '/owner/dashboard',
+    name: 'OwnerDashboard',
+    component: () => import('../views/OwnerDashboardView.vue'),
+    meta: { requiresClinicOwner: true },
+  },
+  {
+    path: '/owner/clinics',
+    name: 'OwnerClinics',
+    component: () => import('../views/OwnerClinicsView.vue'),
+    meta: { requiresClinicOwner: true },
+  },
+  {
+    path: '/owner/doctors',
+    name: 'OwnerDoctors',
+    component: () => import('../views/OwnerDoctorsView.vue'),
+    meta: { requiresClinicOwner: true },
+  },
 ]
 
 const router = createRouter({
@@ -44,11 +94,19 @@ const router = createRouter({
 })
 
 router.beforeEach((to, from, next) => {
-  const token = document.cookie.includes('access_token')
+  const auth = useAuthStore(pinia)
+  const hasToken =
+    !!auth.token || !!sessionStorage.getItem('access_token')
   const publicRoutes = ['Login', 'Register', 'Home', 'Clinics', 'ClinicDetail']
 
-  if (!token && !publicRoutes.includes(to.name)) {
+  if (!hasToken && !publicRoutes.includes(to.name)) {
     next({ name: 'Login' })
+  } else if (to.meta.requiresAdmin && !auth.isAdmin) {
+    next({ name: 'Home' })
+  } else if (to.meta.requiresClinicOwner && !auth.isClinicOwner) {
+    next({ name: 'Home' })
+  } else if (to.meta.requiresClinicOwnerOrAdmin && !auth.isAdmin && !auth.isClinicOwner) {
+    next({ name: 'Home' })
   } else {
     next()
   }

@@ -15,6 +15,7 @@ export const useClinicStore = defineStore('clinic', {
       supports_home_visit: null,
       sort_by: 'distance',
     },
+    locationSource: null,
   }),
 
   actions: {
@@ -40,9 +41,12 @@ export const useClinicStore = defineStore('clinic', {
       }
     },
 
-    setUserLocation(lat, lng) {
+    setUserLocation(lat, lng, source = null) {
       this.filters.lat = lat
       this.filters.lng = lng
+      if (source) {
+        this.locationSource = source
+      }
     },
 
     updateFilters(filters) {

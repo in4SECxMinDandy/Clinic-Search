@@ -86,8 +86,9 @@ async def health():
 async def health_ready():
     checks = {"database": False, "redis": False}
     try:
-        async with db.get_async_session() as session:
-            await session.execute("SELECT 1")
+        async with db.async_session_factory() as session:
+            from sqlalchemy import text
+            await session.execute(text("SELECT 1"))
             checks["database"] = True
     except Exception as e:
         logger.error("db_health_check_failed", error=str(e))

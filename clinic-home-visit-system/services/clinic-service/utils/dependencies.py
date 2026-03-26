@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from typing import Optional
+from uuid import UUID
 from fastapi import Depends, HTTPException, status, Header
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,7 +30,7 @@ def set_database(db: Database):
 async def get_db() -> AsyncSession:
     if _db is None:
         raise RuntimeError("Database not initialized")
-    async with _db.get_async_session() as session:
+    async with _db.async_session_factory() as session:
         yield session
 
 
@@ -38,15 +39,8 @@ async def get_redis():
     return get_redis_client()
 
 
-async def optional_user(
-    authorization: Optional[str] = Header(None),
-):
-    """Optional user authentication (doesn't raise if not authenticated)"""
-    if not authorization or not authorization.startswith("Bearer "):
-        return None
-
-    token = authorization.replace("Bearer ", "")
-
+async def _verify_token(token: str) -> Optional[dict]:
+    """Verify token via auth-service, returns user dict or None"""
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(
@@ -59,8 +53,23 @@ async def optional_user(
                     return data
     except Exception:
         pass
-
     return None
+
+
+def _token_from_header(authorization: Optional[str]) -> Optional[str]:
+    if authorization and authorization.startswith("Bearer "):
+        return authorization.replace("Bearer ", "")
+    return None
+
+
+async def optional_user(
+    authorization: Optional[str] = Header(None),
+):
+    """Optional user authentication (doesn't raise if not authenticated)"""
+    token = _token_from_header(authorization)
+    if not token:
+        return None
+    return await _verify_token(token)
 
 
 async def require_user(
@@ -74,3 +83,49 @@ async def require_user(
             detail="Not authenticated",
         )
     return user
+
+
+async def require_admin(
+    authorization: Optional[str] = Header(None),
+):
+    """Require admin role"""
+    user = await require_user(authorization)
+    if user.get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return user
+
+
+async def require_clinic_owner_or_admin(
+    authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Require clinic_owner role or admin. For non-admin, verifies they own the clinic via owner_id in request body."""
+    user = await require_user(authorization)
+    role = user.get("role")
+
+    if role == "admin":
+        return user  # admin bypasses ownership check
+
+    if role != "clinic_owner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Clinic owner or admin access required",
+        )
+    return user
+
+
+async def require_doctor_or_clinic_owner_or_admin(
+    authorization: Optional[str] = Header(None),
+):
+    """Require doctor, clinic_owner, or admin role"""
+    user = await require_user(authorization)
+    role = user.get("role")
+    if role in ("admin", "clinic_owner", "doctor"):
+        return user
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Doctor, clinic owner, or admin access required",
+    )

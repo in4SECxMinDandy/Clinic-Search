@@ -8,7 +8,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from typing import Optional
-from fastapi import Depends, HTTPException, status, Cookie
+from uuid import UUID
+
+from fastapi import Depends, HTTPException, status, Cookie, Header
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,15 +35,28 @@ async def get_db() -> AsyncSession:
     """Dependency to get database session"""
     if _db is None:
         raise RuntimeError("Database not initialized")
-    async with _db.get_async_session() as session:
+    async with _db.async_session_factory() as session:
         yield session
+
+
+def _jwt_from_cookie_or_bearer(
+    access_token: Optional[str],
+    authorization: Optional[str],
+) -> Optional[str]:
+    if access_token:
+        return access_token
+    if authorization and authorization.startswith("Bearer "):
+        return authorization.removeprefix("Bearer ").strip()
+    return None
 
 
 async def get_current_user(
     db: AsyncSession = Depends(get_db),
-    token: Optional[str] = Cookie(None),
+    access_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
 ) -> User:
-    """Dependency to get current authenticated user"""
+    """JWT from HttpOnly access_token cookie or Authorization: Bearer (gateway / SPA)."""
+    token = _jwt_from_cookie_or_bearer(access_token, authorization)
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -57,7 +72,17 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    result = await db.execute(select(User).where(User.id == payload["sub"]))
+    sub = payload.get("sub")
+    try:
+        user_id = UUID(sub) if isinstance(sub, str) else sub
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
     if not user or not user.is_active:

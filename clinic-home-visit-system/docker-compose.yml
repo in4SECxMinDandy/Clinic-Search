@@ -60,6 +60,7 @@ services:
       - JWT_ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=15
       - REFRESH_TOKEN_EXPIRE_DAYS=7
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
       - LOG_LEVEL=INFO
     depends_on:
       - postgres
@@ -206,6 +207,8 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_MULTIPLE_DATABASES=postgres
+      # New clusters only (first init): UTF-8 for Vietnamese text
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --locale=C.UTF-8
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-schemas.sql:/docker-entrypoint-initdb.d/init-schemas.sql:ro

@@ -23,14 +23,14 @@ class Booking(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), nullable=False)
     clinic_id = Column(UUID(as_uuid=True), nullable=False)
-    doctor_id = Column(UUID(as_uuid=True), nullable=False)
+    doctor_id = Column(UUID(as_uuid=True), nullable=True)
     booking_type = Column(String(20), nullable=False)  # 'at_clinic', 'home_visit'
     scheduled_at = Column(DateTime(timezone=True), nullable=False)
     duration_minutes = Column(Integer, nullable=False, default=30)
     status = Column(String(20), nullable=False, default="pending")
     home_address = Column(Text)
-    home_lat = Column(String(20))
-    home_lng = Column(String(20))
+    home_lat = Column(Numeric(10, 8))
+    home_lng = Column(Numeric(11, 8))
     notes = Column(Text)
     total_price = Column(Numeric(10, 2))
     payment_method = Column(String(20))  # 'cash', 'transfer', 'vnpay', 'momo'

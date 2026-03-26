@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from review_service.routers import reviews
+from review_service.utils.dependencies import set_database
 from shared.config import get_settings
 from shared.database import Database, get_database_url
 
@@ -33,6 +34,7 @@ async def lifespan(app: FastAPI):
     db_url = get_database_url(host="postgres", port=5432, database="postgres", schema="review_schema")
     db = Database(db_url, schema_name="review_schema")
     db.init()
+    set_database(db)
     yield
     await db.close()
 
@@ -47,8 +49,9 @@ async def health(): return {"status": "healthy", "service": "review-service", "v
 @app.get("/health/ready")
 async def health_ready():
     try:
-        async with db.get_async_session() as session:
-            await session.execute("SELECT 1")
+        async with db.async_session_factory() as session:
+            from sqlalchemy import text
+            await session.execute(text("SELECT 1"))
         return {"status": "healthy"}
     except:
         return {"status": "unhealthy"}

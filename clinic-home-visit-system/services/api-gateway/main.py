@@ -76,11 +76,21 @@ async def proxy_v1(path: str, request: Request):
                 content=body,
                 params=request.query_params,
             )
+        out_headers = {
+            k: v
+            for k, v in response.headers.items()
+            if k.lower() not in ("content-length", "transfer-encoding", "content-encoding")
+        }
+        ct = response.headers.get("content-type") or "application/json"
+        if "application/json" in ct and "charset" not in ct.lower():
+            ct = "application/json; charset=utf-8"
+        out_headers["content-type"] = ct
+
         return Response(
             content=response.content,
             status_code=response.status_code,
-            headers=dict(response.headers),
-            media_type=response.headers.get("content-type"),
+            headers=out_headers,
+            media_type=ct,
         )
     except httpx.RequestError as e:
         logger.error("proxy_error", service=service, error=str(e))

@@ -2,27 +2,41 @@
 Auth Service - Authentication Router
 """
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status, Response, Cookie
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Cookie, Body, Header
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth_service.models.models import User, RefreshToken
 from auth_service.schemas.schemas import (
-    RegisterRequest, LoginRequest, TokenResponse,
-    RefreshTokenRequest, ForgotPasswordRequest, ResetPasswordRequest,
-    ChangePasswordRequest, VerifyTokenResponse,
+    RegisterRequest,
+    LoginRequest,
+    TokenResponse,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    ChangePasswordRequest,
+    VerifyTokenResponse,
 )
 from auth_service.services.jwt_service import (
     hash_password, verify_password, create_access_token,
     create_refresh_token, decode_token, get_token_expiry,
 )
-from auth_service.utils.dependencies import get_db
+from auth_service.utils.dependencies import get_db, _jwt_from_cookie_or_bearer
 from shared.config import get_settings
 import structlog
 
 logger = structlog.get_logger()
 settings = get_settings()
 router = APIRouter()
+
+
+class RefreshTokenOptionalBody(BaseModel):
+    """Body for refresh when not using HttpOnly cookie."""
+
+    refresh_token: str | None = None
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
@@ -68,12 +82,19 @@ async def register(
     db.add(token_record)
     await db.commit()
 
-    response = Response(status_code=status.HTTP_201_CREATED)
+    payload = {
+        "user_id": str(user.id),
+        "email": user.email,
+        "full_name": user.full_name,
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+    }
+    response = JSONResponse(status_code=status.HTTP_201_CREATED, content=payload)
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=True,
+        secure=settings.COOKIE_SECURE,
         samesite="strict",
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
@@ -81,18 +102,11 @@ async def register(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=True,
+        secure=settings.COOKIE_SECURE,
         samesite="strict",
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
     )
-
-    return {
-        "user_id": str(user.id),
-        "email": user.email,
-        "full_name": user.full_name,
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-    }
+    return response
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -156,7 +170,7 @@ async def login(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=True,
+        secure=settings.COOKIE_SECURE,
         samesite="strict",
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
@@ -164,7 +178,7 @@ async def login(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=True,
+        secure=settings.COOKIE_SECURE,
         samesite="strict",
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
     )
@@ -178,13 +192,22 @@ async def login(
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
-    request: RefreshTokenRequest,
     response: Response,
     db: AsyncSession = Depends(get_db),
+    body: RefreshTokenOptionalBody = Body(default_factory=lambda: RefreshTokenOptionalBody()),
+    refresh_token_cookie: Optional[str] = Cookie(None, alias="refresh_token"),
 ):
-    """Refresh access token using refresh token"""
+    """Refresh access token using refresh token from body or HttpOnly cookie."""
     import hashlib
-    token_hash = hashlib.sha256(request.refresh_token.encode()).hexdigest()
+
+    raw_refresh = (body.refresh_token or "").strip() or refresh_token_cookie
+    if not raw_refresh:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token required",
+        )
+
+    token_hash = hashlib.sha256(raw_refresh.encode()).hexdigest()
 
     result = await db.execute(
         select(RefreshToken)
@@ -230,7 +253,7 @@ async def refresh_token(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=True,
+        secure=settings.COOKIE_SECURE,
         samesite="strict",
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
@@ -238,7 +261,7 @@ async def refresh_token(
         key="refresh_token",
         value=new_refresh_token,
         httponly=True,
-        secure=True,
+        secure=settings.COOKIE_SECURE,
         samesite="strict",
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
     )
@@ -273,12 +296,14 @@ async def logout(
     return {"message": "Logged out successfully"}
 
 
-@router.post("/verify")
+@router.api_route("/verify", methods=["GET", "POST"])
 async def verify_token(
     db: AsyncSession = Depends(get_db),
-    token: str = Cookie(None),
+    access_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
 ) -> VerifyTokenResponse:
-    """Verify JWT token"""
+    """Verify JWT from access_token cookie or Authorization: Bearer (service-to-service)."""
+    token = _jwt_from_cookie_or_bearer(access_token, authorization)
     if not token:
         return VerifyTokenResponse(valid=False)
 
@@ -332,7 +357,7 @@ async def health():
 @router.post("/change-password")
 async def change_password(
     request: ChangePasswordRequest,
-    current_user: User = Depends(get_db),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Change password for logged in user"""

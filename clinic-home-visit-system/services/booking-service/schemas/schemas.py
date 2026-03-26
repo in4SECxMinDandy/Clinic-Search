@@ -3,12 +3,12 @@ Booking Service - Pydantic Schemas
 """
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class BookingCreate(BaseModel):
     clinic_id: str
-    doctor_id: str
+    doctor_id: Optional[str] = Field(None)
     booking_type: str = Field(..., pattern="^(at_clinic|home_visit)$")
     scheduled_at: datetime
     duration_minutes: int = Field(default=30, ge=30, le=120)
@@ -17,6 +17,21 @@ class BookingCreate(BaseModel):
     home_lng: Optional[float] = Field(None, ge=-180, le=180)
     notes: Optional[str] = None
     payment_method: str = Field(default="cash", pattern="^(cash|transfer)$")
+
+    @field_validator("scheduled_at", mode="before")
+    @classmethod
+    def parse_scheduled_at(cls, v):
+        if isinstance(v, datetime):
+            return v
+        if isinstance(v, str):
+            try:
+                dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
+                if dt.tzinfo is not None:
+                    return dt.replace(tzinfo=None)
+                return dt
+            except Exception:
+                pass
+        return v
 
 
 class BookingUpdate(BaseModel):
@@ -27,6 +42,15 @@ class BookingUpdate(BaseModel):
 
 class BookingStatusUpdate(BaseModel):
     status: str = Field(..., pattern="^(confirmed|in_progress|completed)$")
+
+
+class AdminBookingStatusUpdate(BaseModel):
+    """Admin or clinic owner can set any status"""
+    status: str = Field(
+        ...,
+        pattern="^(pending|confirmed|in_progress|completed|cancelled|expired)$",
+    )
+    cancellation_reason: Optional[str] = None
 
 
 class BookingCancel(BaseModel):

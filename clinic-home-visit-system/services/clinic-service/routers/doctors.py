@@ -11,7 +11,10 @@ from clinic_service.models.models import Doctor, DoctorSchedule, Clinic
 from clinic_service.schemas.schemas import (
     DoctorCreate, DoctorUpdate, DoctorResponse, ScheduleCreate, ScheduleResponse,
 )
-from clinic_service.utils.dependencies import get_db
+from clinic_service.utils.dependencies import (
+    get_db, require_admin, require_clinic_owner_or_admin,
+    require_doctor_or_clinic_owner_or_admin,
+)
 
 router = APIRouter()
 
@@ -25,7 +28,7 @@ async def list_doctors(
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all doctors with filters"""
+    """List all doctors with filters (public)"""
     query = select(Doctor).where(Doctor.is_active == True)
 
     if clinic_id:
@@ -66,7 +69,7 @@ async def list_doctors(
 
 @router.get("/{doctor_id}")
 async def get_doctor(doctor_id: str, db: AsyncSession = Depends(get_db)):
-    """Get doctor details"""
+    """Get doctor details (public)"""
     result = await db.execute(select(Doctor).where(Doctor.id == doctor_id))
     doctor = result.scalar_one_or_none()
 
@@ -95,7 +98,7 @@ async def get_doctor(doctor_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.get("/{doctor_id}/schedules")
 async def get_doctor_schedules(doctor_id: str, db: AsyncSession = Depends(get_db)):
-    """Get doctor schedule"""
+    """Get doctor schedule (public)"""
     result = await db.execute(
         select(DoctorSchedule)
         .where(DoctorSchedule.doctor_id == doctor_id)
@@ -125,7 +128,7 @@ async def get_available_slots(
     duration_minutes: int = Query(default=30, ge=15, le=120),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get available booking slots for a doctor on a date"""
+    """Get available booking slots for a doctor on a date (public)"""
     try:
         target_date = datetime.strptime(date, "%Y-%m-%d").date()
     except ValueError:
@@ -133,7 +136,6 @@ async def get_available_slots(
 
     day_of_week = target_date.weekday()  # 0=Monday, 6=Sunday
 
-    # Get doctor schedule for this day
     result = await db.execute(
         select(DoctorSchedule)
         .where(DoctorSchedule.doctor_id == doctor_id)
@@ -145,7 +147,6 @@ async def get_available_slots(
     if not schedule:
         return {"slots": [], "message": "No schedule for this day"}
 
-    # Generate time slots
     slots = []
     current_time = datetime.combine(target_date, schedule.start_time)
     end_time = datetime.combine(target_date, schedule.end_time)
@@ -154,7 +155,7 @@ async def get_available_slots(
         slots.append({
             "start": current_time.isoformat(),
             "end": (current_time + timedelta(minutes=duration_minutes)).isoformat(),
-            "available": True,  # TODO: Check against existing bookings
+            "available": True,
         })
         current_time += timedelta(minutes=schedule.slot_duration_minutes)
 
@@ -162,12 +163,22 @@ async def get_available_slots(
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-async def create_doctor(request: DoctorCreate, db: AsyncSession = Depends(get_db)):
-    """Create a new doctor"""
-    # Verify clinic exists
+async def create_doctor(
+    request: DoctorCreate,
+    admin_user: dict = Depends(require_clinic_owner_or_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new doctor. Admin can create for any clinic; clinic_owner must own the clinic."""
+    user_id = admin_user["user_id"]
+    role = admin_user["role"]
+
     clinic_result = await db.execute(select(Clinic).where(Clinic.id == request.clinic_id))
-    if not clinic_result.scalar_one_or_none():
+    clinic = clinic_result.scalar_one_or_none()
+    if not clinic:
         raise HTTPException(status_code=404, detail="Clinic not found")
+
+    if role != "admin" and str(clinic.owner_id) != user_id:
+        raise HTTPException(status_code=403, detail="You do not own this clinic")
 
     doctor = Doctor(
         clinic_id=request.clinic_id,
@@ -208,12 +219,23 @@ async def create_doctor(request: DoctorCreate, db: AsyncSession = Depends(get_db
 async def create_schedule(
     doctor_id: str,
     request: ScheduleCreate,
+    admin_user: dict = Depends(require_doctor_or_clinic_owner_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create schedule for doctor"""
+    """Create schedule for doctor. Admin/clinic_owner can create for any doctor."""
+    user_id = admin_user["user_id"]
+    role = admin_user["role"]
+
     result = await db.execute(select(Doctor).where(Doctor.id == doctor_id))
-    if not result.scalar_one_or_none():
+    doctor = result.scalar_one_or_none()
+    if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found")
+
+    if role == "clinic_owner":
+        clinic_result = await db.execute(select(Clinic).where(Clinic.id == doctor.clinic_id))
+        clinic = clinic_result.scalar_one_or_none()
+        if not clinic or str(clinic.owner_id) != user_id:
+            raise HTTPException(status_code=403, detail="You do not own the clinic this doctor belongs to")
 
     schedule = DoctorSchedule(
         doctor_id=doctor_id,
@@ -241,14 +263,24 @@ async def create_schedule(
 async def update_doctor(
     doctor_id: str,
     request: DoctorUpdate,
+    admin_user: dict = Depends(require_clinic_owner_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update doctor"""
+    """Update doctor. Admin can update any; clinic_owner can only update doctors in their clinics."""
+    user_id = admin_user["user_id"]
+    role = admin_user["role"]
+
     result = await db.execute(select(Doctor).where(Doctor.id == doctor_id))
     doctor = result.scalar_one_or_none()
 
     if not doctor:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doctor not found")
+
+    if role != "admin":
+        clinic_result = await db.execute(select(Clinic).where(Clinic.id == doctor.clinic_id))
+        clinic = clinic_result.scalar_one_or_none()
+        if not clinic or str(clinic.owner_id) != user_id:
+            raise HTTPException(status_code=403, detail="You do not own the clinic this doctor belongs to")
 
     update_data = request.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -278,13 +310,26 @@ async def update_doctor(
 
 
 @router.delete("/{doctor_id}")
-async def delete_doctor(doctor_id: str, db: AsyncSession = Depends(get_db)):
-    """Delete doctor (soft delete)"""
+async def delete_doctor(
+    doctor_id: str,
+    admin_user: dict = Depends(require_clinic_owner_or_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete doctor (soft delete). Admin can delete any; clinic_owner can only delete doctors in their clinics."""
+    user_id = admin_user["user_id"]
+    role = admin_user["role"]
+
     result = await db.execute(select(Doctor).where(Doctor.id == doctor_id))
     doctor = result.scalar_one_or_none()
 
     if not doctor:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doctor not found")
+
+    if role != "admin":
+        clinic_result = await db.execute(select(Clinic).where(Clinic.id == doctor.clinic_id))
+        clinic = clinic_result.scalar_one_or_none()
+        if not clinic or str(clinic.owner_id) != user_id:
+            raise HTTPException(status_code=403, detail="You do not own the clinic this doctor belongs to")
 
     doctor.is_active = False
     await db.commit()

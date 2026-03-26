@@ -1,8 +1,8 @@
 """
 Clinic Service - GPS Router (Shared Endpoints)
 """
-from typing import Optional
-from fastapi import APIRouter, Depends, Query
+from typing import Optional, Union
+from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel
 
 from shared.gps.haversine import (
@@ -84,7 +84,7 @@ async def geocode(
     """Convert address to GPS coordinates using Nominatim"""
     result = await geocode_address(address)
     if not result:
-        return {"error": "Address not found"}
+        raise HTTPException(status_code=404, detail="Address not found")
 
     return GeocodeResponse(
         address=address,
@@ -102,7 +102,7 @@ async def reverse_geocode_endpoint(
     """Convert GPS coordinates to address"""
     result = await reverse_geocode(lat, lng)
     if not result:
-        return {"error": "Location not found"}
+        raise HTTPException(status_code=404, detail="Location not found")
 
     return ReverseGeocodeResponse(
         lat=lat,

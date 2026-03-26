@@ -36,15 +36,26 @@ class Database:
         self.pool_size = pool_size
         self.max_overflow = max_overflow
 
+    def _build_connect_args(self) -> dict:
+        """Build connect_args for async engine; sets search_path via server_settings for asyncpg."""
+        args = {}
+        if self.schema_name:
+            args["statement_cache_size"] = 0
+            args["server_settings"] = {"search_path": self.schema_name}
+        return args
+
     def create_async_engine(self) -> None:
         """Create async engine"""
+        connect_args = self._build_connect_args()
         self.async_engine = create_async_engine(
             self.database_url,
             echo=os.getenv("SQL_ECHO", "false").lower() == "true",
             pool_size=self.pool_size,
             max_overflow=self.max_overflow,
             pool_pre_ping=True,
+            connect_args=connect_args,
         )
+
         self.async_session_factory = async_sessionmaker(
             bind=self.async_engine,
             class_=AsyncSession,
@@ -128,8 +139,6 @@ def get_database_url(
 ) -> str:
     """Build database URL"""
     url = f"postgresql+asyncpg://{username}:{password}@{host}:{port}/{database}"
-    if schema:
-        url += f"?search_path={schema}"
     return url
 
 
