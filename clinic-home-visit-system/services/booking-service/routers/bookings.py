@@ -299,12 +299,13 @@ async def list_owner_clinic_bookings(
     # First get all clinic IDs owned by this user (for clinic_owner)
     if role == "clinic_owner":
         try:
-            from clinic_service.models.models import Clinic
+            from booking_service.models.models import Clinic
             clinic_result = await db.execute(
                 select(Clinic.id).where(Clinic.owner_id == user_id)
             )
             owned_clinic_ids = [row[0] for row in clinic_result.fetchall()]
-        except Exception:
+        except Exception as e:
+            logger.error("failed_to_query_owned_clinics", error=str(e))
             owned_clinic_ids = []
 
         if not owned_clinic_ids:
@@ -343,7 +344,7 @@ async def list_owner_clinic_bookings(
     )
 
 
-@router.put("/clinic/{clinic_id}/owner/update-status")
+@router.put("/clinic/{clinic_id}/owner/update-status/{booking_id}")
 async def owner_update_booking_status(
     clinic_id: str,
     booking_id: str,
@@ -352,7 +353,7 @@ async def owner_update_booking_status(
     db: AsyncSession = Depends(get_db),
 ):
     """Clinic owner endpoint: update booking status for their own clinic."""
-    from clinic_service.models.models import Clinic
+    from booking_service.models.models import Clinic
 
     user_id = staff_user["user_id"]
     role = staff_user["role"]

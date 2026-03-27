@@ -108,7 +108,10 @@ const handleLogin = async () => {
   loading.value = true
   try {
     await authStore.login(form.value.email, form.value.password)
-    router.push('/clinics')
+    // Redirect to returnUrl if available, otherwise default to /clinics
+    const returnUrl = sessionStorage.getItem('returnUrl')
+    sessionStorage.removeItem('returnUrl')
+    router.push(returnUrl || '/clinics')
   } catch (e) {
     const d = e.response?.data?.detail
     if (Array.isArray(d)) {
@@ -116,7 +119,7 @@ const handleLogin = async () => {
     } else if (typeof d === 'string') {
       error.value = d
     } else {
-      error.value = e.message || 'Đăng nhập thất bại. Vui lòng thử lại.'
+      error.value = e.message || 'Dang nhap that bai. Vui long thu lai.'
     }
   } finally {
     loading.value = false

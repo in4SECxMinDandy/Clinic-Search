@@ -100,7 +100,14 @@ router.beforeEach((to, from, next) => {
   const publicRoutes = ['Login', 'Register', 'Home', 'Clinics', 'ClinicDetail']
 
   if (!hasToken && !publicRoutes.includes(to.name)) {
+    // Save return URL for post-login redirect
+    sessionStorage.setItem('returnUrl', to.fullPath)
     next({ name: 'Login' })
+  } else if (hasToken && to.name === 'Login') {
+    // If already logged in, redirect to returnUrl or default
+    const returnUrl = sessionStorage.getItem('returnUrl')
+    sessionStorage.removeItem('returnUrl')
+    next(returnUrl || '/clinics')
   } else if (to.meta.requiresAdmin && !auth.isAdmin) {
     next({ name: 'Home' })
   } else if (to.meta.requiresClinicOwner && !auth.isClinicOwner) {

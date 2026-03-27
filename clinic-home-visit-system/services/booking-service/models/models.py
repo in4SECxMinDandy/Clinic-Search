@@ -12,6 +12,15 @@ class Base(DeclarativeBase):
     pass
 
 
+class Clinic(Base):
+    """Clinic model for querying owned clinics"""
+    __tablename__ = "clinics"
+    __table_args__ = {"schema": "clinic_schema"}
+
+    id = Column(UUID(as_uuid=True), primary_key=True)
+    owner_id = Column(UUID(as_uuid=True))
+
+
 class Booking(Base):
     __tablename__ = "bookings"
     __table_args__ = (

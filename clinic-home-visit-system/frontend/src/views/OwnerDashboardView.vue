@@ -352,7 +352,7 @@ const showRejectModal = (booking) => {
 
 const approveBooking = async (booking) => {
   try {
-    await api.put(`/bookings/clinic/${booking.clinic_id}/owner/update-status`, { status: 'confirmed' })
+    await api.put(`/bookings/clinic/${booking.clinic_id}/owner/update-status/${booking.id}`, { status: 'confirmed' })
     await fetchBookings()
   } catch (error) {
     console.error('Error approving booking:', error)
@@ -363,7 +363,7 @@ const approveBooking = async (booking) => {
 const confirmReject = async () => {
   rejectModal.value.loading = true
   try {
-    await api.put(`/bookings/clinic/${rejectModal.value.booking.clinic_id}/owner/update-status`, {
+    await api.put(`/bookings/clinic/${rejectModal.value.booking.clinic_id}/owner/update-status/${rejectModal.value.booking.id}`, {
       status: 'cancelled',
       cancellation_reason: rejectModal.value.reason
     })
