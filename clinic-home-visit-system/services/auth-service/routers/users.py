@@ -6,7 +6,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth_service.models.models import User
-from auth_service.schemas.schemas import UserResponse, UserUpdate
+from auth_service.schemas.schemas import UserResponse, UserUpdate, UserStatusUpdate
 from auth_service.utils.dependencies import get_current_user, get_current_admin_user, get_db
 
 router = APIRouter()
@@ -176,7 +176,7 @@ async def admin_update_user_role(
 @router.put("/admin/{user_id}/status")
 async def admin_toggle_user_status(
     user_id: str,
-    is_active: bool,
+    request: UserStatusUpdate,
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user),
 ):
@@ -187,11 +187,11 @@ async def admin_toggle_user_status(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user.is_active = is_active
+    user.is_active = request.is_active
     await db.commit()
 
     return {
-        "message": f"User {'activated' if is_active else 'deactivated'}",
+        "message": f"User {'activated' if request.is_active else 'deactivated'}",
         "user_id": str(user.id),
-        "is_active": is_active,
+        "is_active": request.is_active,
     }

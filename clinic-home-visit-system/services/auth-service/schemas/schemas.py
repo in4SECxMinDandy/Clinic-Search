@@ -110,6 +110,11 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = Field(None, max_length=20)
 
 
+class UserStatusUpdate(BaseModel):
+    """User status update schema for admin"""
+    is_active: bool
+
+
 class UserResponse(UserBase):
     """User response schema"""
     id: str
