@@ -24,7 +24,7 @@ from auth_service.services.jwt_service import (
     hash_password, verify_password, create_access_token,
     create_refresh_token, decode_token, get_token_expiry,
 )
-from auth_service.utils.dependencies import get_db, _jwt_from_cookie_or_bearer
+from auth_service.utils.dependencies import get_db, _jwt_from_cookie_or_bearer, get_current_user
 from shared.config import get_settings
 import structlog
 

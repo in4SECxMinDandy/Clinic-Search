@@ -34,12 +34,6 @@ http:
       entryPoints:
         - web
       priority: 10
-    traefik-dashboard:
-      rule: "PathPrefix(`/dashboard`)"
-      service: api@internal
-      entryPoints:
-        - web
-      priority: 100
 
   services:
     gateway:
