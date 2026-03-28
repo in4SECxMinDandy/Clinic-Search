@@ -594,14 +594,11 @@ CORS_ORIGINS=["http://localhost:3000","http://localhost"]
 5. Update API Gateway proxy trong `services/api-gateway/main.py`
 6. Thêm schema vào `scripts/init-schemas.sql`
 
-### Testing
+### Demo
 
-```bash
-# Chạy tests (nếu có)
-pytest services/auth-service/tests/
+```
+https://github.com/user-attachments/assets/90288400-c9fa-4101-8dde-60879c9cb102
 
-# Hoặc chạy qua Docker
-docker-compose exec auth-service pytest
 ```
 
 ### Debug
