@@ -596,10 +596,7 @@ CORS_ORIGINS=["http://localhost:3000","http://localhost"]
 
 ### Demo
 
-```
 https://github.com/user-attachments/assets/90288400-c9fa-4101-8dde-60879c9cb102
-
-```
 
 ### Debug
 
