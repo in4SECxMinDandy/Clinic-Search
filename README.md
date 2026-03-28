@@ -597,6 +597,13 @@ CORS_ORIGINS=["http://localhost:3000","http://localhost"]
 ### Demo
 
 https://github.com/user-attachments/assets/90288400-c9fa-4101-8dde-60879c9cb102
+![download](https://github.com/user-attachments/assets/253c8a45-8d68-4264-9724-489f013feaa0)
+![5a7db737-d1ce-480e-862f-d8c625145540](https://github.com/user-attachments/assets/92c6b969-7237-4de6-9909-37ee9c013ce4)
+![11d9cd77-cd5d-4e90-8f75-52e486b5793f](https://github.com/user-attachments/assets/7d9988f5-1107-420c-ae9f-35e4cc337c85)
+![4656a3a5-7e35-4834-b6b9-b05cbb965047](https://github.com/user-attachments/assets/44f54e4c-8927-4bc0-9493-935a1daa79fe)
+![05804875-c251-46f1-be00-6ebf37fb0f78](https://github.com/user-attachments/assets/a81692ee-7775-4036-9ad0-7242441564e2)
+<img width="72" height="72" alt="gray" src="https://github.com/user-attachments/assets/3d301a40-2984-430f-8d3d-8128c24bcc77" />
+
 
 ### Debug
 
